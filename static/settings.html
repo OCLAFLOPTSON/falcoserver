@@ -1,0 +1,27 @@
+<~ extends FalcoServer/static/base.html ~>
+
+<form action="/settings/update/time" method="POST">
+    <h1>Update Time</h1>
+    <div class="form-row">
+        <p>Year: </p><input type="number" name="year" class="form-input">
+    </div>
+    <div class="form-row">
+        <p>Month: </p><input type="number" name="month" class="form-input">
+    </div>
+    <div class="form-row">
+        <p>Day: </p><input type="number" name="day" class="form-input">
+    </div>
+    <div class="form-row">
+        <p>Weekday: </p><input type="number" name="weekday" class="form-input">
+    </div>
+    <div class="form-row">
+        <p>Hour: </p><input type="number" name="hour" class="form-input">
+    </div>
+    <div class="form-row">
+        <p>Minute: </p><input type="number" name="minute" class="form-input">
+    </div>
+    <div class="form-row">
+        <p>Second: </p><input type="number" name="second" class="form-input">
+    </div>
+    <input type="submit">
+</form>
