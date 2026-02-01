@@ -20,16 +20,6 @@ body {
     box-shadow: inset 0 0 12px 12px black;
 }
 
-.temp_reading {
-    width: 125px;
-    height: 40px;
-    border: 1px solid black;
-    background-color: rgb(20, 20, 54);
-}
-#od_temp {
-    background-color: rgb(255, 221, 26);
-}
-
 p {
     color: whitesmoke;
 }
@@ -38,21 +28,4 @@ h1 {
 }
 hr {
     width: 90vw;
-}
-form {
-    display: flex;
-    flex-direction: column;
-    padding-bottom: 24px;
-    padding-left: 12px;
-    padding-right: 12px;
-    border: 1px solid black;
-    background-color: rgba(12, 12, 53, 0.747);
-    border-radius: 12%;
-}
-.form-row {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    width: inherit;
 }
