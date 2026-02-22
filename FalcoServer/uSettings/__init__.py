@@ -36,10 +36,10 @@ class Settings(object):
         with open('/FalcoServer/uSettings/domain.txt', 'w') as f:
             f.write(self.factory_settings[1])
     
-    def get(self, sttng_type: SettingType):
-        '''Read a setting file by a given SettingType and return its 
+    def get(self, domain:str):
+        '''Read a setting file by a given domain and return its 
         contents as a string.'''
-        _path = f'/FalcoServer/uSettings/{self.api[sttng_type]}.txt'
+        _path = f'/FalcoServer/uSettings/{domain}.txt'
         try:
             stat(_path)
             with open(_path, 'r') as f:
@@ -48,12 +48,17 @@ class Settings(object):
         except OSError:
             raise FileNotFound(_path)
 
-    def change_setting(self, sttng_type: SettingType, new_value: str):
-        '''Update a given setting by type.'''
-        _path = f'/FalcoServer/uSettings/{self.api[sttng_type]}.txt'
+    def update_setting(self, domain, new_value: str):
+        '''Update a given setting by domain after diff check pass.'''
+        _path = f'/FalcoServer/uSettings/{domain}.txt'
         try:
             stat(_path)
-            with open(f'/FalcoServer/uSettings/{self.api[sttng_type]}.txt', 'w') as f:
+            with open(_path, 'r') as f:
+                if new_value == f.read():
+                    f.close()
+                    return
+                f.close()
+            with open(_path, 'w') as f:
                 f.write(new_value)
                 f.close()
         except OSError:

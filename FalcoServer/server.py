@@ -5,7 +5,7 @@ from uasyncio import (
     run, get_event_loop, sleep, create_task,
     start_server
 )
-from FalcoServer.uSettings import settings, SettingType
+from FalcoServer.uSettings import settings
 from FalcoServer.dns import dns_server
 
 def _char_check(char, string):
@@ -16,9 +16,16 @@ def _char_check(char, string):
 
 #######################################~Class~Declarations~##############
 
+class Awaitable:
+    '''An async function/method or generator'''
+    def __await__():
+        yield
+
 class Request:
     __slots__ = ("method", "path", "path_parts", "headers", "form_data")
-    def __init__(self, method, path: str):
+    def __init__(self, method, path: str, local_ip, client_ip):
+        self.local_ip = local_ip
+        self.client_ip = client_ip
         self.method = method
         self.path = path
         self.path_parts = path.strip("/").split("/") if path != "/" else ['']
@@ -110,6 +117,101 @@ class CreateRoute:
             router.add(path, fn, ("POST",), priority)
             return fn
         return deco
+    
+class Server:
+    '''Construct a server object for use in the main loop.
+    
+        ### security 
+            Expects an awaitable which returns a boolean. Return 
+            value should be truthy on security check pass, falsey otherwise.
+            A falsey return value will result in the rejection of an incoming
+            request. \n
+            The Request object is injected as an argument and must be
+            handled.
+    '''
+    def __init__(self, security: Awaitable | None=None,
+                 router: Router=router, host:str='0.0.0.0', port=80,
+                 backlog=2):
+        self.security = security
+        self.ip = 'unset ip'
+        self.router = router
+        self.host = host
+        self.port = port
+        self.backlog = backlog
+    
+    async def startup(self):
+        self.router.build()
+        server = await start_server(
+            self.http_handler,
+            host=self.host,
+            port=self.port,
+            backlog=self.backlog
+        )
+        print(f'Server Started on IP: {self.ip}')
+        print("Thank you for using Falco Server!")
+        print(f'Application Running @: http://{settings.get('domain')}/')
+        async with server:
+            get_event_loop().run_forever()
+            await server.wait_closed()
+
+    async def read_request(self, reader, client_ip) -> Request:
+        line = await reader.readline()
+        if not line:
+            return None
+
+        method, path, _ = line.decode().split(" ")
+        req = Request(method, path, self.ip, client_ip)
+
+        while True:
+            h = await reader.readline()
+            if h in (b"\r\n", b"\n", b""):
+                break
+            k, v = h.decode().split(":", 1)
+            req.headers[k.strip()] = v.strip()
+        
+        _length = int(req.headers.get("Content-Length", 0))
+        if _length:
+            raw_body = await reader.readexactly(_length)
+            req.content_type = req.headers.get("Content-Type")
+            if req.content_type.startswith("application/x-www-form-urlencoded"):
+                req.form_data = parse_form(raw_body)
+
+        return req
+    
+    async def http_handler(self, reader: StreamReader, writer: StreamWriter):
+        try:
+            peer = writer.get_extra_info("peername")
+            if peer:
+                client_ip, client_port = peer
+
+            request = await self.read_request(reader, client_ip)
+            if not request:
+                return
+            
+            if not self.security:
+                pass
+            else:
+                try:
+                    if not await self.security(request):
+                        return
+                except TypeError:
+                    raise TypeError('Security protocol must be awaitable.')
+            print(f"Call From -> client ip: {client_ip} port: {client_port}")
+            
+            handler = router.resolve(request)
+            
+            if not handler:
+                resp = Response("Not Found", 404)
+                print(f"/{request.path} | {request.method} | {resp.status}")
+            else:
+                resp = await handler(request)
+                print(f"/{request.path} | {request.method} | {resp.status}")
+
+            await send_response(writer, resp)
+        except Exception as e:
+            print_exception(e)
+        finally:
+            await writer.wait_closed()
 
 ####################################~Function~Declarations~##############
 
@@ -121,30 +223,6 @@ def parse_form(body: bytes) -> dict:
         k, v = pair.split(b"=", 1)
         form_data[k.decode()] = v.decode()
     return form_data
-
-async def read_request(reader: StreamReader) -> Request:
-    line = await reader.readline()
-    if not line:
-        return None
-
-    method, path, _ = line.decode().split(" ")
-    req = Request(method, path)
-
-    while True:
-        h = await reader.readline()
-        if h in (b"\r\n", b"\n", b""):
-            break
-        k, v = h.decode().split(":", 1)
-        req.headers[k.strip()] = v.strip()
-    
-    _length = int(req.headers.get("Content-Length", 0))
-    if _length:
-        raw_body = await reader.readexactly(_length)
-        req.content_type = req.headers.get("Content-Type")
-        if req.content_type.startswith("application/x-www-form-urlencoded"):
-            req.form_data = parse_form(raw_body)
-
-    return req
 
 async def send_response(writer, response: Response):
     try:
@@ -164,48 +242,6 @@ async def send_response(writer, response: Response):
     except Exception as e:
         print_exception(e)
 
-def redirect(path: str):
-    try:
-        send_response(
-            StreamWriter,
-            Response(status=303, headers={"Location":path})
-        )
-    except Exception as e:
-        print_exception(e)
-
-async def reload_after(writer, request: Request):
-    ''' Reloads the current page after performing some action.
-        Defaults to "/".'''
-    ref  = request.headers.get("referer", "/")
-    response = Response(status=303, headers={"Location":ref})
-    await send_response(writer, response)
-    
-async def handle_http_client(reader: StreamReader, writer: StreamWriter):
-    try:
-        req = await read_request(reader)
-        if not req:
-            return
-        
-        peer = writer.get_extra_info("peername")
-        if peer:
-            client_ip, client_port = peer
-        print(f"Call From -> client ip: {client_ip} port: {client_port}")
-        
-        handler = router.resolve(req)
-        
-        if not handler:
-            resp = Response("Not Found", 404)
-            print(f"/{req.path} | {req.method} | {resp.status}")
-        else:
-            resp = await handler(req)
-            print(f"/{req.path} | {req.method} | {resp.status}")
-
-        await send_response(writer, resp)
-    except Exception as e:
-        print_exception(e)
-    finally:
-        await writer.wait_closed()
-
 ####################################~Program Loop~#######################
 
 def start_ap() -> str:
@@ -214,34 +250,21 @@ def start_ap() -> str:
     ap = WLAN(AP_IF)
     ap.active(True)
     ap.config(
-        essid=settings.get(SettingType.ssid),
+        essid=settings.get('ssid'),
         security=0
     )
     while not ap.active():
         pass
     return ap.ifconfig()[0]
 
-
-async def main():
-    from FalcoServer.uSettings import settings
+async def main(server: Server):
     local_ip = start_ap()
-    create_task(_http_server(local_ip))
+    server.ip = local_ip
+    create_task(server.startup())
     create_task(dns_server(local_ip))
     while True:
         await sleep(3600)
 
-async def _http_server(local_ip):
-    router.build()
-    server = await start_server(
-        handle_http_client, "0.0.0.0", 80, backlog=2
-    )
-    print(f'Server Started on IP: {local_ip}')
-    print("Thank you for using Falco Server!")
-    print(f'Application Running @: http://{settings.get(SettingType.domain)}/')
-    async with server:
-        get_event_loop().run_forever()
-        await server.wait_closed()
-
-def run_server() -> None:
+def run_server(server: Server=Server()) -> None:
     '''Wrapper for uasyncio.run(main())'''
-    run(main())
+    run(main(server=server))

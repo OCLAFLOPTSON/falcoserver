@@ -17,26 +17,27 @@ def render_template(file_path, **values):
         Extended Templates:
             Evaluated first and injected into current template.\n
     API:
-        <~ generic_value \~>:
+        {{ generic_value }}:
             Pass generic values into the document.
-        <~ extends *file_path* \~>:
+        {{ extends *file_path* }}:
             Extend an html file found at the given file path.
-        <~ content \~>:
+        {{ content }}:
             For use in an extended file, the location to which 
             child content will appear within the extended document.
-        <~ if *conditional* \~>:
+        {{ if *conditional* }}:
             Opening conditional bracket. Conditional is boolean.
             HTML within this block will be conditionally rendered.
-        <~ else \~>:
+        {{ else }}:
             HTML within this block rendered only if parent if block
             is false.
-        <~ end if \~>:
+        {{ end if }}:
             Closes the conditional block.
-        <~ css *file_path* \~>:
+        {{ css *file_path* }}:
             Link to a static css file at the given file path.
-        <~ script *file_path* \~>:
+        {{ script *file_path* }}:
             Link to a static javascript file at the given file path.
     '''
+
     try:
         def source(path):
             try:
@@ -55,7 +56,7 @@ def render_template(file_path, **values):
                 first = ''
             try:
                 stripped = first.strip()
-                if stripped.startswith('<~ extends'):
+                if stripped.startswith('{{ extends'):
                     path = stripped.split()[2]
                     try:
                         stat(path)
@@ -64,7 +65,7 @@ def render_template(file_path, **values):
                         raise FileNotFound(path)
                     with open(path, "r") as f:
                         for line in f:
-                            if "<~ content ~>" in line:
+                            if "{{ content }}" in line:
                                 for child_line in stream:
                                     yield child_line
                             else:
@@ -82,29 +83,29 @@ def render_template(file_path, **values):
             try:
                 for line in stream:
                     stripped = line.strip()
-                    if stripped.startswith("<~ if ") and stripped.endswith(" ~>"):
+                    if stripped.startswith("{{ if ") and stripped.endswith(" }}"):
                         if active:
                             raise ValueError("Nested if blocks not supported.")
                         key = stripped[6:-3].strip()
                         state = bool(values.get(key, False))
                         active = True
                         continue
-                    if stripped == "<~ else ~>":
+                    if stripped == "{{ else }}":
                         if not active:
                             raise ValueError("else without if")
                         state = not state
                         continue
-                    if stripped == "<~ end if ~>":
+                    if stripped == "{{ end if }}":
                         if not active:
                             raise ValueError("end if without if")
                         state = False
                         active = False
                         continue
-                    if stripped.startswith("<~ bool ") and stripped.endswith(" ~>"):
+                    if stripped.startswith("{{ bool ") and stripped.endswith(" }}"):
                         key = stripped[7:-3].strip()
                         emit = bool(values.get(key, False))
                         for bool_line in stream:
-                            if bool_line.strip() == "<~ end bool ~>":
+                            if bool_line.strip() == "{{ end bool }}":
                                 break
                             if emit:
                                 yield bool_line
@@ -123,11 +124,11 @@ def render_template(file_path, **values):
                     out = ""
                     i = 0
                     while True:
-                        start = line.find("<~", i)
+                        start = line.find("{{", i)
                         if start == -1:
                             out += line[i:]
                             break
-                        end = line.find("~>", start)
+                        end = line.find("}}", start)
                         if end == -1:
                             out += line[i:]
                             break
@@ -142,7 +143,7 @@ def render_template(file_path, **values):
                             or tag.startswith("bool ")
                             or tag == "end bool"
                         ):
-                            out += line[start:end + 2]
+                            out += line[start:end + 1]
                         elif tag.startswith("css "):
                             css_path = tag[4:].strip()
                             try:

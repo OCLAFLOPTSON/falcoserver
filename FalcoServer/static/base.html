@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><~ title ~></title>
-    <~ css FalcoServer/static/style.css ~>
-    <~ script FalcoServer/static/script.js ~>
+    <title>{{ title }}</title>
+    {{ css FalcoServer/static/style.css }}
+    {{ script FalcoServer/static/script.js }}
 </head>
 <body>
     <h1>Falco Server</h1>
     <hr>
-    <~ content ~>
+    {{ content }}
 </body>
 </html>

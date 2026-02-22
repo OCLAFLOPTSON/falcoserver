@@ -1,5 +1,5 @@
 """
-Falco Server v - 0.0.1
+Falco Server v - 0.0.2
 
 An async first http server framework designed to run on microcontroller
 dev boards capable of running MicroPython.
@@ -33,9 +33,11 @@ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
 CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT
 OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
 THE USE OR OTHER DEALINGS IN THE SOFTWARE
+
+
 """
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 class FileNotFound(Exception):
     '''File not found error'''
@@ -46,9 +48,9 @@ import gc
 gc.threshold(16000)
 
 from FalcoServer.server import (
-    Route, Response, Request, CreateRoute, SettingType,
+    Route, Response, Request, CreateRoute, Server,
     settings,
-    run_server, redirect
+    run_server
 )
 from FalcoServer.template import render_template
 from FalcoServer.background_task import (
