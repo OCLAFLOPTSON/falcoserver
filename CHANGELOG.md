@@ -1,13 +1,9 @@
-# 2/20/2026
-- [x] Implement Server Class 
-- [x] Refactor Relating to new Server class
-- [x] Implement Security Handshake Hook
-- [x] Refactor templating syntax to replace tilda tags with curly braces, in keeping 
-with accepted convention in similar templating engines.
+# 2/24/26
+- [x] Bug fixes
+- [x] Began work on listener routine in templating engine.
 
-# 2/21/2026
-- [x] Update InteractiveTask class and run_loop method to include and interact with a 
-boolean flag to denote whether the task is currently running. Allowing InteractiveTask.running 
-to be queried at runtime.
-- [x] Refactor BackgroundTask and InteractivTask. Bug fixes relating to BackgroundTask
-- [x] Wrote example main.py files
+# 2/27/26
+- [x] Cleaned up repl output. Bug fixes in server.py regarding repl output.
+
+# 3/2/26-3/4/26
+- [x] Improvements to listen tag (added command tag functionality, cleaned up listener_factory function)

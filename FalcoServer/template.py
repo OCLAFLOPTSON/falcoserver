@@ -1,7 +1,48 @@
 from uos import stat
 from sys import print_exception
-from FalcoServer.server import Response
+from FalcoServer.server import Response, router
 from FalcoServer import FileNotFound
+
+def listener_factory(action: str, commands: dict[str, str], interval: int=250):
+    '''
+    ## return a string containing a dynamically constructed JS listener
+    ## that's wrapped in an HTML script tag. Contains newline characters.
+    <hr>
+
+    ### action
+        used to construct browser-side namespace and the path that's called
+        on the back end. Expects a route by the same name which returns a
+        value.
+    
+    ### commands
+        A dict of commands to be added to the listener function. Each
+        command adds a line which performs assignment. 
+        #### Example: 
+            ```JavaScript
+            async function <*action*> () {
+                <*other executions*>;
+                ...
+                <*commands_key*> = <*commands[key]*>;
+                For each command... 
+            }
+            ```
+        If assignment fails then the error is logged to the console in browser.
+    
+    ### interval
+        The interval by which the listener will poll the back end. Must
+        be a whole integer representing milliseconds.
+     '''
+    script = f'\n<script>\n'
+    script += f'async function {action}() {{\n  try {{\n'
+    script += f'    const resp = await fetch("/{action}");\n'
+    script += f'    const resp_data = await resp.json();\n'
+    script += f'    const _{action} = document.getElementById("{action}");\n'
+    for key in commands.keys():
+        script += f'    _{action}.{key} = "{commands[key]}".replace("$$", resp_data.body);\n'
+    script += f"  }} catch(e) {{\n  console.log(e);\n}}\n}}\nsetInterval({action}, {interval});\n"
+    script += f"{action}();\n</script>\n"
+
+    return script
 
 def render_template(file_path, **values):
     '''
@@ -16,26 +57,72 @@ def render_template(file_path, **values):
             Evaluated and passed according to template logic.\n
         Extended Templates:
             Evaluated first and injected into current template.\n
-    API:
-        {{ generic_value }}:
-            Pass generic values into the document.
-        {{ extends *file_path* }}:
-            Extend an html file found at the given file path.
-        {{ content }}:
-            For use in an extended file, the location to which 
-            child content will appear within the extended document.
-        {{ if *conditional* }}:
-            Opening conditional bracket. Conditional is boolean.
-            HTML within this block will be conditionally rendered.
-        {{ else }}:
-            HTML within this block rendered only if parent if block
-            is false.
-        {{ end if }}:
-            Closes the conditional block.
-        {{ css *file_path* }}:
-            Link to a static css file at the given file path.
-        {{ script *file_path* }}:
-            Link to a static javascript file at the given file path.
+    <hr>
+
+    # API:
+
+    ## {{ generic_value }}:
+        Pass generic values into the document.
+
+    ## {{ extends <*file_path*> }}:
+        Extend an html file found at the given file path.
+
+    ## {{ content }}:
+        For use in an extended file, the location to which 
+        child content will appear within the extended document.
+
+    ## {{ if <*conditional*> }}:
+        Opening conditional bracket. Conditional is boolean.
+        HTML within this block will be conditionally rendered.
+
+    ## {{ else }}:
+        HTML within this block rendered only if parent if block
+        is false.
+
+    ## {{ end if }}:
+        Closes the conditional block.
+
+    ## {{ css <*file_path*> }}:
+        Link to a static css file at the given file path.
+
+    ## {{ script <*file_path*> }}:
+        Link to a static javascript file at the given file path.
+
+    ## {{ listen <*route*> <*interval*> <*{command:value($$)}*> }}
+
+        Inject a javascript based polling listener to call a given
+        API route and update a UI element in realtime without
+        reloading. Results in an html script tag being inserted at
+        listen tag location.
+
+        ### route
+            - Must point to existing route as declared in your script.
+            Route must return a Response.JSON object.
+
+        ### interval
+            - The interval at which the given route is polled.
+        
+        ### command (optional) {example:command($$)}
+            - Optional internal commands taking keyword arguments.
+            - Each command will add a line to the resulting JavaScript
+            function which performs an assignment, assigning the value
+            to the provided lefthand key. (example = command($$);)
+            - Double cash symbols point to the area which should take
+            injected values from the backend polling.
+            - Commands should contain no spaces and be seperated by colon.
+            - Commands must follow JavaScript DOM syntax.
+            
+            #### Examples:
+                - {innerText:$$%}
+                ```
+                <*action*>.innerText = 20%;
+                ```
+
+                - {style.backgroundColor:rgba(255,255,0,$$%)}
+                    ```
+                    <*action*>.style.backgroundColor = rgba(255,255,0,20%);
+                    ```
+
     '''
 
     try:
@@ -57,13 +144,13 @@ def render_template(file_path, **values):
             try:
                 stripped = first.strip()
                 if stripped.startswith('{{ extends'):
-                    path = stripped.split()[2]
+                    _path = stripped.split()[2]
                     try:
-                        stat(path)
+                        stat(_path)
                     except OSError as e:
                         print_exception(e)
-                        raise FileNotFound(path)
-                    with open(path, "r") as f:
+                        raise FileNotFound(_path)
+                    with open(_path, "r") as f:
                         for line in f:
                             if "{{ content }}" in line:
                                 for child_line in stream:
@@ -133,18 +220,8 @@ def render_template(file_path, **values):
                             out += line[i:]
                             break
                         out += line[i:start]
-                        tag = line[start + 2:end].strip()
-                        if (
-                            tag.startswith("if ")
-                            or tag == "else"
-                            or tag == "end if"
-                            or tag.startswith("extends")
-                            or tag == "content"
-                            or tag.startswith("bool ")
-                            or tag == "end bool"
-                        ):
-                            out += line[start:end + 1]
-                        elif tag.startswith("css "):
+                        tag:str = line[start + 2:end].strip()
+                        if tag.startswith("css "):
                             css_path = tag[4:].strip()
                             try:
                                 stat(css_path)
@@ -162,6 +239,24 @@ def render_template(file_path, **values):
                                 out += "<script>\n"+script_content+"\n</script>"
                             except OSError:
                                 out += f'<~ SCRIPT file "{script_path}" not found ~>'
+                        elif tag.startswith("listen "):
+                            tag_parts = tag.split()
+                            commands = dict()
+                            for command in tag_parts:
+                                if command.startswith("{"):
+                                    try:
+                                        key, value = command[1:len(command)-1].split(':')
+                                        commands[key] = value
+                                    except ValueError:
+                                        raise ValueError(f"Listener error: bad bracket command {command}")
+                            if len(tag_parts) >= 3:
+                                try:
+                                    interval = int(tag_parts[2])
+                                except ValueError:
+                                    raise ValueError('Listener interval must convert to whole integer.')
+                            else:
+                                interval = 250
+                            out += listener_factory(tag_parts[1], commands, interval)
                         else:
                             parts = tag.split()
                             if len(parts) == 2 and parts[0] == "value":
@@ -197,4 +292,3 @@ def render_template(file_path, **values):
         )
     except Exception as e:
         print_exception(e)
-

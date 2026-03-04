@@ -5,6 +5,7 @@ from uasyncio import (
     run, get_event_loop, sleep, create_task,
     start_server
 )
+from ujson import dumps
 from FalcoServer.uSettings import settings
 from FalcoServer.dns import dns_server
 
@@ -49,6 +50,14 @@ class Request:
         self.content_type = ""
 
 class Response:
+    class JSON:
+        def __init__(self, body, status=200):
+            self.body = dumps({
+                "body": body,
+                "status": status
+            })
+            self.status = status
+
     __slots__ = ("status", "headers", "body", "form_data")
     def __init__(self, body="", status=200, headers={}):
         self.status = status
@@ -79,7 +88,7 @@ class Route:
 
 class Router:
     def __init__(self):
-        self._routes = []
+        self._routes:list[Route] = []
         self._locked = False
 
     def add(self, path, handler, methods=("GET",), priority=0):
@@ -196,16 +205,38 @@ class Server:
                         return
                 except TypeError:
                     raise TypeError('Security protocol must be awaitable.')
-            print(f"Call From -> client ip: {client_ip} port: {client_port}")
             
             handler = router.resolve(request)
             
             if not handler:
                 resp = Response("Not Found", 404)
-                print(f"/{request.path} | {request.method} | {resp.status}")
             else:
                 resp = await handler(request)
-                print(f"/{request.path} | {request.method} | {resp.status}")
+            
+            try:
+                status = resp.status
+            except AttributeError:
+                status = 'ERR'
+                
+            spaces = [
+                ' ', ' ', ' ', ' ', ' ',
+                ' ', ' ', ' ', ' ', ' ',
+                ' ', ' ', ' ', ' ', ' ',
+                ' ', ' ', ' ', ' ', ' ',
+                ' ', ' ', ' ', ' ', ' '
+            ]
+            mthd = (
+                request.method +
+                ''.join(spaces[20:(len(spaces)-len(request.method))+1])
+            )
+            mssg = [
+                f'{request.path + ''.join(spaces[len(request.path):])} |',
+                f' {mthd} |',
+                f' {status} |',
+                f' {request.client_ip}'
+            ]
+            
+            print(''.join(mssg))
 
             await send_response(writer, resp)
         except Exception as e:
@@ -217,15 +248,28 @@ class Server:
 
 def parse_form(body: bytes) -> dict:
     form_data = dict()
+
     for pair in body.split(b"&"):
         if b"=" not in pair:
             continue
-        k, v = pair.split(b"=", 1)
-        form_data[k.decode()] = v.decode()
+        key, value = pair.split(b"=", 1)
+        value = value.decode()
+        if value == "on":
+            value = True
+        elif value == "off":
+            value = False
+        form_data[key.decode()] = value
+
     return form_data
 
 async def send_response(writer, response: Response):
     try:
+        if type(response) is Response.JSON:
+            writer.write(f'HTTP/1.1 {response} OK\r\n'.encode())
+            writer.write(b'\r\n')
+            writer.write(f"{response.body}".encode())
+            writer.drain()
+            return
         writer.write(
             "HTTP/1.1 {} OK\r\n".format(response).encode()
         )
@@ -238,6 +282,8 @@ async def send_response(writer, response: Response):
         else:
             writer.write(response.body)
         await writer.drain()
+        return
+    except AttributeError:
         return
     except Exception as e:
         print_exception(e)
