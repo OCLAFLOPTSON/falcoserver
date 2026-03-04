@@ -1,5 +1,5 @@
 """
-Falco Server v - 0.0.2
+Falco Server v - 0.0.3
 
 An async first http server framework designed to run on microcontroller
 dev boards capable of running MicroPython.
@@ -37,7 +37,7 @@ THE USE OR OTHER DEALINGS IN THE SOFTWARE
 
 """
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 class FileNotFound(Exception):
     '''File not found error'''
