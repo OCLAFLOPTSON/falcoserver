@@ -247,13 +247,27 @@ class Server:
 ####################################~Function~Declarations~##############
 
 def parse_form(body: bytes) -> dict:
+    def _decode(raw):
+        raw = raw.replace("+", " ")
+        out = ""
+        i = 0
+        while i < len(raw):
+            if raw[i] == "%" and i + 2 < len(raw):
+                hexval = raw[i+1:i+3]
+                out += chr(int(hexval, 16))
+                i += 3
+            else:
+                out += raw[i]
+                i += 1
+        return out
+
     form_data = dict()
 
     for pair in body.split(b"&"):
         if b"=" not in pair:
             continue
         key, value = pair.split(b"=", 1)
-        value = value.decode()
+        value = _decode(value.decode())
         if value == "on":
             value = True
         elif value == "off":

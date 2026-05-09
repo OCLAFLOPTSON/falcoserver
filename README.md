@@ -22,6 +22,9 @@ project_root/
 │   │   ├── index.html
 │   │   ├── script.js
 │   │   └── style.css
+│   ├── uSettings/
+│   │   ├── __init__.py
+│   │   └── initialized.txt
 │   ├── __init__.py
 │   ├── background_task.py
 │   ├── dns.py

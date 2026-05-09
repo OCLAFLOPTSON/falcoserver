@@ -21,7 +21,7 @@ class InteractiveTask:
         loop.'''
         async def _intrpt():
             self._stop = True
-            await sleep(self.interval+1)
+            await sleep(self.interval*2)
             self._stop = False
         get_event_loop().create_task(_intrpt())
 
